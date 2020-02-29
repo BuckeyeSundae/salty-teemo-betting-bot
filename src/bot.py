@@ -1,4 +1,5 @@
 from time import time
+import random
 import src.lib.irc as irc_
 import src.lib.functions_general as general
 import src.lib.functions_commands as commands
@@ -50,11 +51,11 @@ class Main:
 				underdog = lower['name']
 
 				# Bet 1000 mushrooms
-				bet = int(1000)
+				bet = random.randint(500, 1500)
 
 				# Send the message and record the bet.
-				irc.send_message(channel, '!%s %s' % (underdog, bet))
-				print('Bet complete: !%s %s\n' % (underdog, bet))
+				irc.send_message(channel, f'!{underdog} {bet}')
+				print(f'Bet complete: !{underdog} {bet}\n')
 				bet_complete = True
 				betting_started = False
 
@@ -104,8 +105,8 @@ class Main:
 								totals['red_bets'] += 1
 
 							print('Time since first bet: %s s' % time_since_first_bet)
-							print('Blue: \t%s shrooms, %s bets' % ("{:,}".format(totals['blue_amt']), totals['blue_bets']))
-							print('Red: \t%s shrooms, %s bets\n' % ("{:,}".format(totals['red_amt']), totals['red_bets']))
+							print(f'Blue: \t{"{:,}".format(totals["blue_amt"])} shrooms, {totals["blue_bets"]} bets')
+							print(f'Red: \t{"{:,}".format(totals["red_amt"])} shrooms, {totals["red_bets"]} bets\n')
 
 						# Message contains 'Betting has ended' or over 3 minutes has passed.
 						if 'Betting has ended' in message or time_since_first_bet >= 210:
@@ -142,10 +143,10 @@ class Main:
 								command = command.split(' ')[0]
 
 								if commands.is_on_cooldown(command, channel):
-									general.pbot('Command is on cooldown. (%s) (%s) (%ss remaining)' % (command, username, commands.get_cooldown_remaining(command, channel)), channel)
+									general.pbot(f'Command is on cooldown. ({command}) ({username}) ({commands.get_cooldown_remaining(command, channel)}s remaining)', channel)
 								else:
 									# Command (function) is not on cooldown, so send a message to Twitch chat.
-									general.pbot('(%s) (%s)' % (command, username), channel)
+									general.pbot(f'({command}) ({username})', channel)
 									result = commands.pass_to_function(command, args)
 
 									if result:
@@ -157,10 +158,10 @@ class Main:
 						# Command is not a function and has no arguments (i.e. a simple command with a simple response, such as "!test").
 						else:
 							if commands.is_on_cooldown(command, channel):
-								general.pbot('Command is on cooldown. (%s) (%s) (%ss remaining)' % (command, username, commands.get_cooldown_remaining(command, channel)), channel)
+								general.pbot(f'Command is on cooldown. ({command}) ({username}) ({commands.get_cooldown_remaining(command, channel)}s remaining)', channel)
 							elif commands.check_has_return(command):
 								# Command is not on cooldown, so send a message to Twitch chat.
-								general.pbot('(%s) (%s)' % (command, username), channel)
+								general.pbot(f'({command}) ({username})', channel)
 								res = commands.get_return(command)
 								general.pbot(res, channel)
 								irc.send_message(channel, res)

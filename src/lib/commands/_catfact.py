@@ -13,4 +13,4 @@ def _catfact(username=config['username']):
 
 	fact = result['data'][0]['fact']
 
-	return '@%s did you know: %s' % (username, fact)
+	return f'@{username} did you know: {fact}'

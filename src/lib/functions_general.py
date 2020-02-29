@@ -12,17 +12,16 @@ def pp(message, mtype='INFO'):
 	if mtype == "ERROR":
 		mtype = red.format(mtype)
 
-	print('[%s] [%s] %s' % (time.strftime('%H:%M:%S', time.gmtime()), mtype, message))
+	print(f'[{time.strftime("%H:%M:%S", time.gmtime())}] [{mtype}] {message}')
 
 
 def ppi(channel, message, username):
-	print(
-		'[%s %s] <%s> %s' % (time.strftime('%H:%M:%S', time.gmtime()), channel, grn.format(username.lower()), message))
+	print(f'[{time.strftime("%H:%M:%S", time.gmtime())} {channel}] <{grn.format(username.lower())}> {message}')
 
 
 def pbot(message, channel=''):
 	if channel:
-		msg = '[%s %s] <%s> %s' % (time.strftime('%H:%M:%S', time.gmtime()), channel, red.format('BOT'), message)
+		msg = f"[{time.strftime('%H:%M:%S', time.gmtime())} {channel}] <{red.format('BOT')}> {message}"
 	else:
-		msg = '[%s] <%s> %s' % (time.strftime('%H:%M:%S', time.gmtime()), red.format('BOT'), message)
+		msg = f"[{time.strftime('%H:%M:%S', time.gmtime())}] <{red.format('BOT')}> {message}"
 	print(msg)
