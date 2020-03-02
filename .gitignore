@@ -1,1 +1,3 @@
 .DS_STORE
+/src/config/config.py
+/.idea/

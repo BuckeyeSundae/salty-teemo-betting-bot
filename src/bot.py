@@ -54,7 +54,7 @@ class Main:
 		# Update current entry.
 		update_bal = db.BalanceRecord()
 		update_bal.set(starting_balance=self.balance, bet_amt=bet_amount, bet_ratio=ratio, bet_side=side,
-					   favored_side=side if ratio >= 1 else teams[f'{side}'], new_balance=int(balance))
+					   favored_side=side if ratio >= 0.5 else teams[f'{side}'], new_balance=int(balance))
 		self.balance = int(balance)
 
 	def run(self):
