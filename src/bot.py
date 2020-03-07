@@ -30,9 +30,9 @@ class Main:
 		# Set the bet amount.
 		bet = random.randint(500, 1500)
 		# Choose a side
-		ratio = int(total_d.get('blue_amt', 0)) / (int(total_d.get('red_amt', 0)) + int(total_d.get('blue_amt', 0)))
+		ratio = int(total_d.get('blue_amt', 0)) / (int(total_d.get('red_amt', 0)) + int(total_d.get('blue_amt', 1)))
 		if 0.4 < ratio < 0.6:
-			side = random.random(['blue', 'red'])
+			side = random.choice(['blue', 'red'])
 		else:
 			side = 'blue' if int(total_d.get('blue_amt', 0)) > int(total_d.get('red_amt', 0)) else 'red'
 			bet = random.randint(1000, 3000)
@@ -41,7 +41,8 @@ class Main:
 		self.irc.send_message(target_channel, f'!{side} {bet}')
 		print(f'Bet complete: !{side} {bet}\n')
 		you_bet = True
-		return you_bet
+		bet_dict['bet_team'] = side
+		return you_bet, bet_dict
 
 	@db_session
 	def update_bet(self, side, bet_amount, balance, ratio, teams):
@@ -172,7 +173,7 @@ class Main:
 
 			# Wait until 170 seconds has passed to bet.
 			if timers['bet_timer'] >= 170 and bet_info['betting_started'] and not bet_info['bet_complete']:
-				bet_info['bet_complete'] = self.bet_logic(channel, totals, bet_info)
+				bet_info['bet_complete'], bet_info = self.bet_logic(channel, totals, bet_info)
 
 			# Check if the script is still connected to IRC.
 			if len(data) == 0:
