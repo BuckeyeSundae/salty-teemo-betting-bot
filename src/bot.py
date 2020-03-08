@@ -27,21 +27,35 @@ class Main:
 		return mes_dict, chan, mes, user
 
 	def bet_logic(self, target_channel, total_d, bet_dict):
-		# Set the bet amount.
-		bet = random.randint(500, 1500)
-		# Choose a side
+		# Getting stats about the matchup at the time of betting.
 		ratio = int(total_d.get('blue_amt', 0)) / (int(total_d.get('red_amt', 0)) + int(total_d.get('blue_amt', 1)))
-		if 0.4 < ratio < 0.6:
+		# Using stats to guide bet logic.
+		if ratio <= 0.15 or ratio >= 0.85:
+			side = 'red' if int(total_d.get('blue_amt', 0)) > int(total_d.get('red_amt', 0)) else 'blue'
+			bet = random.randint(200, 500)
+		elif 0.4 < ratio < 0.6:
 			side = random.choice(['blue', 'red'])
+			bet = random.randint(500, 1500)
+		# Currently, in cases where ratio is between .15-.4, and .6-.85
 		else:
-			side = 'blue' if int(total_d.get('blue_amt', 0)) > int(total_d.get('red_amt', 0)) else 'red'
-			bet = random.randint(1000, 3000)
+			blue_betters_ratio = int(total_d.get('blue_amt', 0)) / int(total_d.get('blue_bets', 1))
+			red_betters_ratio = int(total_d.get('red_amt', 0)) / int(total_d.get('red_bets', 1))
+			betters_to_bet = blue_betters_ratio / red_betters_ratio
+			if 0.33 < betters_to_bet < 3:
+				side = 'blue' if int(total_d.get('blue_amt', 0)) > int(total_d.get('red_amt', 0)) else 'red'
+				bet = random.randint(1000, 3000)
+				print(f"ratio of betters is fine: {betters_to_bet}")
+			else:
+				side = 'blue' if float(betters_to_bet) < 0.33 else 'red'
+				bet = random.randint(500, 1500)
+				print(f"ratio of betters is crazy: {betters_to_bet}")
 
 		# Send the message and record the bet.
 		self.irc.send_message(target_channel, f'!{side} {bet}')
 		print(f'Bet complete: !{side} {bet}\n')
 		you_bet = True
 		bet_dict['bet_team'] = side
+		bet_dict['bet_amount'] = bet
 		return you_bet, bet_dict
 
 	@db_session
