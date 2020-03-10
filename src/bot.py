@@ -157,7 +157,6 @@ class Main:
 				time_dict['first_bet'] = 0
 				time_dict['bet_timer'] = 0
 
-
 				print('Betting has ended\n')
 
 		if f"{self.config['username']} - You find " in message:

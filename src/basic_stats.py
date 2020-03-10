@@ -23,6 +23,8 @@ def main():
         print(totalgames)
         df['loss_predicts'] = df['bet_ratio'].where(df['win_status'] < 1)
         df['win_predicts'] = df['bet_ratio'].where(df['win_status'] == 1)
+        df.hist()
+        plt.show()
     except:
         cur.close()
         conn.close()
