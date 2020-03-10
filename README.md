@@ -1,14 +1,16 @@
 Salty Teemo Betting Bot
 ==========
 
-This is a fork of the twitch-bot made by aidanrwt: https://github.com/aidanrwt/twitch-bot
-It is a simple Twitch chat/irc bot written in Python 2.7.16, modified to interact with the Salty Teemo channel.
+This is a fork of the Salty Teemo twitch-bot made by knakamura13, https://github.com/knakamura13/salty-teemo-betting-bot
+Which itself was a fork of the twitch-bot made by aidanrwt: https://github.com/aidanrwt/twitch-bot
+It is a simple Twitch chat/irc bot written in Python 3.8, modified to interact with the Salty Teemo channel.
 
 Getting Started
 ============
-* Ensure your system has Python 2.7 installed: `python --version`
+* Ensure your system has Python 3.8 installed: `python --version`
 * Install the `requests` package: `pip install requests`
-* Clone the Git repository: `git clone https://github.com/knakamura13/salty-teemo-betting-bot`
+* Also install the `pony.orm` package for SQLite management: `pip install pony`
+* Clone the Git repository: `git clone https://github.com/BuckeyeSundae/salty-teemo-betting-bot`
 * Replace all of the placeholders in `src/config/config.py` with your own username, oauth token, channels, etc.
 * Make the serve.py script executable: `chmod +x serve.py`
 * Run the serve.py script: `./serve.py` or `python serve.py`
@@ -73,31 +75,27 @@ Betting in Salty Teemo
 
 The code that determines which team to bet on and how many mushrooms to bet is the following:
 ```
-# bot.py lines 65-67:
+	def bet_logic(self, target_channel, total_d, bet_dict):
+		# Set the bet amount.
+		bet = random.randint(500, 1500)
+		# Choose a side
+		ratio = int(total_d.get('blue_amt', 0)) / (int(total_d.get('red_amt', 0)) + int(total_d.get('blue_amt', 1)))
+		if 0.4 < ratio < 0.6:
+			side = random.choice(['blue', 'red'])
+		else:
+			side = 'blue' if int(total_d.get('blue_amt', 0)) > int(total_d.get('red_amt', 0)) else 'red'
+			bet = random.randint(1000, 3000)
 
-# Bet on the underdog.
-underdog = lower['name']
-bet = int(y)
+		# Send the message and record the bet.
+		self.irc.send_message(target_channel, f'!{side} {bet}')
+		print(f'Bet complete: !{side} {bet}\n')
+		you_bet = True
+		bet_dict['bet_team'] = side
+		return you_bet, bet_dict
 ```
-where `y` is calculated beforehand using a basic algorithm. You can replace `int(y)` with any integer to change how much you want to bet.
+This method contains the objects used in the normal logic. It will create a random bet between 500-1500 and randomly choose a side if the total bets are nearly even between the sides (between .4 and .6). If the ratio is not even, the bet will be a rnadom integer between 1000-3000 on the side expected to win.
 
 
-Reading other peoples' messages
+Saving Bet Information
 ===============================
-The relevant code here is the following:
-```
-# bot.py lines 93-98:
-
-#######################################
-# Handle messages sent by other users #
-#######################################
-if username != config['username']:
-	# Message was sent by @xxsaltbotxx.
-	if username == 'xxsaltbotxx':
-```
-where `xxsaltbotxx` is a specific user that is being tracked. 
-If you want to print out all messages from someone with the username `twitchuser12`, you can add this code as an additional `if` statement:
-```
-	if username == 'twitchuser12':
-		print('%s says: %s' % (username, mesage))
-```
+The logic for updating (or creating) the SQLite database is imported into bot.by from src/lib/sql_table.py. This file contains the structure of the database to be built, which at the moment is a single table named "BalanceRecord". This class is imported into bot.py in the update_bet method call (lines 48-69). It updates the previous record with its guess about who won that game, based on starting balance math. It then inserts a new row with the information about the most recent bet at the conclusion of betting.
