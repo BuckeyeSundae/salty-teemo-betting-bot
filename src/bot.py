@@ -14,6 +14,16 @@ class Main:
 		self.irc = irc_.irc(config)
 		self.socket = self.irc.get_irc_socket_object
 		self.balance = 0
+		self.bet_dict = {'bet_team': None,
+						 'bet_amt': 0,
+						 'new_balance': 0,
+						 'bet_complete': False,
+						 'bet_submitted': False,
+						 'betting_started': False}
+		self.totals = {'blue_amt': 0,
+					   'red_amt': 0,
+					   'blue_bets': 0,
+					   'red_bets': 0}
 
 	@staticmethod
 	def check_for_message(irc, stuff):
@@ -26,23 +36,25 @@ class Main:
 			user = mes_dict['username']
 		return mes_dict, chan, mes, user
 
-	def bet_logic(self, target_channel, total_d, bet_dict):
-		# Getting stats about the matchup at the time of betting.
-		ratio = int(total_d.get('blue_amt', 0)) / (int(total_d.get('red_amt', 0)) + int(total_d.get('blue_amt', 1)))
+	def bet_logic(self, target_channel):
+		# Getting stats about the match at the time of betting.
+		ratio = int(self.totals.get('blue_amt', 0)) / \
+				(int(self.totals.get('red_amt', 0)) + int(self.totals.get('blue_amt', 1)))
+		print(f'{ratio}')
 		# Using stats to guide bet logic.
 		if ratio <= 0.15 or ratio >= 0.85:
-			side = 'red' if int(total_d.get('blue_amt', 0)) > int(total_d.get('red_amt', 0)) else 'blue'
+			side = 'red' if int(self.totals.get('blue_amt', 0)) > int(self.totals.get('red_amt', 0)) else 'blue'
 			bet = random.randint(200, 500)
 		elif 0.4 < ratio < 0.6:
 			side = random.choice(['blue', 'red'])
 			bet = random.randint(500, 1500)
 		# Currently, in cases where ratio is between .15-.4, and .6-.85
 		else:
-			blue_betters_ratio = int(total_d.get('blue_amt', 0)) / int(total_d.get('blue_bets', 1))
-			red_betters_ratio = int(total_d.get('red_amt', 0)) / int(total_d.get('red_bets', 1))
+			blue_betters_ratio = int(self.totals.get('blue_amt', 0)) / int(self.totals.get('blue_bets', 1))
+			red_betters_ratio = int(self.totals.get('red_amt', 0)) / int(self.totals.get('red_bets', 1))
 			betters_to_bet = blue_betters_ratio / red_betters_ratio
 			if 0.33 < betters_to_bet < 3:
-				side = 'blue' if int(total_d.get('blue_amt', 0)) > int(total_d.get('red_amt', 0)) else 'red'
+				side = 'blue' if int(self.totals.get('blue_amt', 0)) > int(self.totals.get('red_amt', 0)) else 'red'
 				bet = random.randint(1000, 3000)
 				print(f"ratio of betters is fine: {betters_to_bet}")
 			else:
@@ -53,10 +65,8 @@ class Main:
 		# Send the message and record the bet.
 		self.irc.send_message(target_channel, f'!{side} {bet}')
 		print(f'Bet complete: !{side} {bet}\n')
-		you_bet = True
-		bet_dict['bet_team'] = side
-		bet_dict['bet_amount'] = bet
-		return you_bet, bet_dict
+		self.bet_dict['bet_team'] = side
+		self.bet_dict['bet_amount'] = bet
 
 	@db_session
 	def update_bet(self, side, bet_amount, balance, ratio, teams):
@@ -83,79 +93,85 @@ class Main:
 		return database.select('select * from BalanceRecord order by ID desc limit 1')
 
 	@db_session
-	def check_salty_message(self, message, totals, time_dict, bet_dict):
+	def check_salty_message(self, message, time_dict):
 		teams = {'blue': 'red', 'red': 'blue'}
 
 		if f'@{self.config["username"]} - Bet complete' in message:
 			bet_message = message.split(' - Bet complete for ')[1].split(', ')
-			bet_dict['bet_team'] = bet_message[0].lower()
+			self.bet_dict['bet_team'] = bet_message[0].lower()
 			bet_ints = bet_message[1].split('.')
-			bet_dict['bet_amount'] = int(bet_ints[0])
-			bet_dict['new_balance'] = int(bet_ints[1].strip('Your new balance is '))
-			bet_dict['bet_complete'] = True
+			self.bet_dict['bet_amount'] = int(bet_ints[0])
+			self.bet_dict['new_balance'] = int(bet_ints[1].strip('Your new balance is '))
+			self.bet_dict['bet_complete'] = True  # This marker tracks from Salty Teemo whether a manual bet took place.
+			self.bet_dict['bet_submitted'] = True  # This marker tracks the bot bet to ensure only one bet happens.
 			print("Bet Acknowledged")
 
 		if "Bet complete" in message:
 			# This is the first bet of the game.
-			if totals['blue_amt'] == 0 and totals['red_amt'] == 0:
+			if self.totals['blue_amt'] == 0 and self.totals['red_amt'] == 0:
 				time_dict['first_bet'] = time()
 				time_dict['bet_timer'] = 0
-				bet_dict['betting_started'] = True
+				self.bet_dict['betting_started'] = True
 			split = message.split(' - Bet complete for ')[1].split(', ')
 			team = split[0].lower()
 			amt = int(split[1].split('.')[0])
 
 			# Increment totals each time a user bets.
 			if team == 'blue':
-				totals['blue_amt'] += amt
-				totals['blue_bets'] += 1
+				self.totals['blue_amt'] += amt
+				self.totals['blue_bets'] += 1
 			else:
-				totals['red_amt'] += amt
-				totals['red_bets'] += 1
+				self.totals['red_amt'] += amt
+				self.totals['red_bets'] += 1
 
 			print(f"Time since first bet: {time_dict['bet_timer']} s")
-			print(f'Blue: \t{"{:,}".format(totals["blue_amt"])} shrooms, {totals["blue_bets"]} bets')
-			print(f'Red: \t{"{:,}".format(totals["red_amt"])} shrooms, {totals["red_bets"]} bets\n')
+			print(f'Blue: \t{"{:,}".format(self.totals["blue_amt"])} shrooms, {self.totals["blue_bets"]} bets')
+			print(f'Red: \t{"{:,}".format(self.totals["red_amt"])} shrooms, {self.totals["red_bets"]} bets\n')
 
 		# Message contains 'Betting has ended' or over 3 minutes has passed, and we bet.
 		if 'Betting has ended' in message or time_dict['bet_timer'] >= 210:
-			if totals['blue_amt'] != 0 and totals['red_amt'] != 0:
+			if self.totals['blue_amt'] != 0 and self.totals['red_amt'] != 0:
 				if 'name' not in lower:
 					lower['name'] = 'UNKNOWN'
-				bet_team = bet_dict.get('bet_team')
-				bet_amount = bet_dict.get('bet_amount')
-				new_balance = bet_dict.get('new_balance', 0)
+				bet_team = self.bet_dict.get('bet_team')
+				bet_amount = self.bet_dict.get('bet_amount')
+				new_balance = self.bet_dict.get('new_balance', 0)
+
+				other = teams.get(f'{bet_team}')
+				ratio_calc = int(self.totals.get(f'{bet_team}_amt', 0)) / \
+							 (int(self.totals.get(f'{other}_amt', 0)) + int(self.totals.get(f'{bet_team}_amt', 1)))
 
 				# Logic for SQLite db
-				if bet_dict.get('bet_complete'):
-					other = teams[f'{bet_team}']
-					ratio_calc = int(totals[f'{bet_team}_amt']) / \
-								 (int(totals[f'{bet_team}_amt']) + int(totals[f'{other}_amt']))
+				if self.bet_dict.get('bet_complete'):
 					entry = self.update_bet(bet_team, bet_amount, new_balance, ratio_calc, teams)
 					print(f"inserted {entry}")
 
 				# Resetting values at the end of betting.
-				totals = {'blue_amt': 0, 'blue_bets': 0, 'red_amt': 0, 'red_bets': 0}
+				self.totals = {'blue_amt': 0, 'blue_bets': 0, 'red_amt': 0, 'red_bets': 0}
+				self.bet_dict = {'bet_team': None,
+								 'bet_amt': 0,
+								 'new_balance': 0,
+								 'bet_complete': False,
+								 'bet_submitted': False,
+								 'betting_started': False}
 				time_dict['first_bet'] = 0
 				time_dict['bet_timer'] = 0
-				bet_dict['bet_complete'] = False
-				bet_dict['betting_started'] = False
+
 
 				print('Betting has ended\n')
 
-		if f"{self.config['username']} - You have " in message:
-			balance = message.split("- You have ")[1].split("mushrooms.")[0].strip()
-			old_balance = self.balance or db.db.BalanceRecord.select_by_sql('select * from BalanceRecord '
-																			'order by ID desc limit 1')[0].new_balance
-			if balance != old_balance:
-				update = db.BalanceRecord(time=datetime.utcnow(), starting_balance=self.balance,
-										  bet_amt=(int(balance) - old_balance),
-										  farm_event=True, new_balance=int(balance))
+		if f"{self.config['username']} - You find " in message:
+			new_shrooms = int(message.split("- You find ")[1].split("mushrooms.")[0].strip())
+			old_balance = self.balance or int(db.db.BalanceRecord.select_by_sql('select * from BalanceRecord '
+																				'order by ID desc limit 1')[0].new_balance)
+			update = db.BalanceRecord(time=datetime.utcnow(), starting_balance=old_balance,
+										  bet_amt=new_shrooms,
+										  farm_event=True, new_balance=(old_balance+new_shrooms))
 			db.db.flush()
 			db.db.commit()
-			self.balance = balance
+			self.balance = int(old_balance) + new_shrooms
 
-		return totals, time_dict, bet_dict
+		return time_dict
 
 	def run(self):
 		irc = self.irc
@@ -166,9 +182,7 @@ class Main:
 
 		# Initialize reusable properties.
 		timers = {'!farm': time(), 'first_bet': time(), 'bet_timer': 0}
-		totals = {'blue_amt': 0, 'blue_bets': 0, 'red_amt': 0, 'red_bets': 0}
 		higher = lower = {}
-		bet_info = {'bet_complete': False, 'betting_started': False}
 
 		while True:
 			time_since_collect = int(time() - timers['!farm'])
@@ -179,15 +193,17 @@ class Main:
 			irc.check_for_ping(data)
 			message_dict, channel, message, username = self.check_for_message(irc, data)
 
-			# Check if 121 minutes has passed yet.
-			if time_since_collect > 7300:
+			# Check if 180 minutes has passed since start.
+			if time_since_collect > 10800:
 				irc.send_message(channel, '!farm')
-				irc.send_message(channel, "!balance")
 				timers['!farm'] = time()
 
 			# Wait until 170 seconds has passed to bet.
-			if timers['bet_timer'] >= 170 and bet_info['betting_started'] and not bet_info['bet_complete']:
-				bet_info['bet_complete'], bet_info = self.bet_logic(channel, totals, bet_info)
+			if timers['bet_timer'] >= 170 \
+					and self.bet_dict.get('betting_started')\
+					and not self.bet_dict.get('bet_submitted'):
+				self.bet_logic(channel)
+				self.bet_dict['bet_submitted'] = True
 
 			# Check if the script is still connected to IRC.
 			if len(data) == 0:
@@ -198,7 +214,7 @@ class Main:
 			if username:
 				if username == 'xxsaltbotxx':
 					# Message contains 'bet complete for'.
-					totals, timers, bet_info = self.check_salty_message(message, totals, timers, bet_info)
+					timers = self.check_salty_message(message, timers)
 
 				if username == config['username']:
 					if config['log_messages']:
