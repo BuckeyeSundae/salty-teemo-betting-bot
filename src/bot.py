@@ -9,6 +9,18 @@ from datetime import datetime
 
 
 class Main:
+	"""
+	Primary execution class wrapper. This class manages the connection to IRC, providing both messages and message
+	reading. This claos also contains the logic for placing bets and the SQLite record writing to dynamically record the
+	bets and prior bet results.
+
+	Methods:
+		check_for_message: gets the message logs from IRC, returning the channel, message, and user objects separately.
+		bet_logic: controls the logic for choosing a side to bet, and how much to bet.
+		update_bet: updates SQLite db with bet record and prior record's win status
+		check_salty_message: uses saltybot messages to track the status of live betting, including self-provided bets
+		run: provides logic for maintaining ongoing bets.
+	"""
 	def __init__(self, config):
 		self.config = config
 		self.irc = irc_.irc(config)
@@ -42,10 +54,10 @@ class Main:
 				(int(self.totals.get('red_amt', 0)) + int(self.totals.get('blue_amt', 1)))
 		print(f'{ratio}')
 		# Using stats to guide bet logic.
-		if ratio <= 0.15 or ratio >= 0.85:
+		if ratio <= 0.125 or ratio >= 0.875:
 			side = 'red' if int(self.totals.get('blue_amt', 0)) > int(self.totals.get('red_amt', 0)) else 'blue'
 			bet = random.randint(200, 500)
-		elif 0.4 < ratio < 0.6:
+		elif 0.35 < ratio < 0.65:
 			side = random.choice(['blue', 'red'])
 			bet = random.randint(500, 1500)
 		# Currently, in cases where ratio is between .15-.4, and .6-.85
@@ -54,8 +66,8 @@ class Main:
 			red_betters_ratio = int(self.totals.get('red_amt', 0)) / int(self.totals.get('red_bets', 1))
 			betters_to_bet = blue_betters_ratio / red_betters_ratio
 			if 0.33 < betters_to_bet < 3:
-				side = 'blue' if int(self.totals.get('blue_amt', 0)) > int(self.totals.get('red_amt', 0)) else 'red'
-				bet = random.randint(1000, 3000)
+				side = 'blue' if int(self.totals.get('blue_amt', 0)) < int(self.totals.get('red_amt', 0)) else 'red'
+				bet = random.randint(1000, 2000)
 				print(f"ratio of betters is fine: {betters_to_bet}")
 			else:
 				side = 'blue' if float(betters_to_bet) < 0.33 else 'red'
@@ -72,16 +84,18 @@ class Main:
 	def update_bet(self, side, bet_amount, balance, ratio, teams):
 		# Try to update previous record if it exists.
 		database = db.db
-		update_win = database.select('select * from BalanceRecord order by ID desc limit 1')
-		update_key = 0
+		update_win = database.select("select * from BalanceRecord order by ID desc limit 2")
 		if update_win:
-			update_key = update_win[0][0]
+			update_key = update_win[0][0] if bool(update_win[0][2]) is False else update_win[1][0]
 			update_db = db.BalanceRecord[update_key]
 			try:
 				self.balance = int(balance) + int(bet_amount)
 			except Exception as e:
 				raise Exception(f'{e} and {balance} {bet_amount}')
 			update_db.win_status = False if update_win[0][9] >= self.balance else True
+		else:
+			print("Couldn't find any existing records. Creating first record.")
+			update_key = 0
 		# Update current entry.
 		update_key += 1
 		update_bet = db.BalanceRecord(time=datetime.utcnow(), starting_balance=self.balance, bet_amt=bet_amount,
@@ -90,7 +104,7 @@ class Main:
 		database.flush()
 		database.commit()
 		self.balance = int(balance)
-		return database.select('select * from BalanceRecord order by ID desc limit 1')
+		return database.select("select * from BalanceRecord order by ID desc limit 1")
 
 	@db_session
 	def check_salty_message(self, message, time_dict):
@@ -125,8 +139,8 @@ class Main:
 				self.totals['red_bets'] += 1
 
 			print(f"Time since first bet: {time_dict['bet_timer']} s")
-			print(f'Blue: \t{"{:,}".format(self.totals["blue_amt"])} shrooms, {self.totals["blue_bets"]} bets')
-			print(f'Red: \t{"{:,}".format(self.totals["red_amt"])} shrooms, {self.totals["red_bets"]} bets\n')
+			print(f'Blue: \t{"{:,}".format(self.totals["blue_amt"])} shrooms, {self.totals["blue_bets"]} bets', sep=' | ')
+			print(f'Red: \t{"{:,}".format(self.totals["red_amt"])} shrooms, {self.totals["red_bets"]} bets')
 
 		# Message contains 'Betting has ended' or over 3 minutes has passed, and we bet.
 		if 'Betting has ended' in message or time_dict['bet_timer'] >= 210:
@@ -198,7 +212,7 @@ class Main:
 				timers['!farm'] = time()
 
 			# Wait until 170 seconds has passed to bet.
-			if timers['bet_timer'] >= 170 \
+			if timers['bet_timer'] >= 160 \
 					and self.bet_dict.get('betting_started')\
 					and not self.bet_dict.get('bet_submitted'):
 				self.bet_logic(channel)
