@@ -139,8 +139,9 @@ class Main:
 				self.totals['red_bets'] += 1
 
 			print(f"Time since first bet: {time_dict['bet_timer']} s")
-			print(f'Blue: \t{"{:,}".format(self.totals["blue_amt"])} shrooms, {self.totals["blue_bets"]} bets', sep=' | ')
-			print(f'Red: \t{"{:,}".format(self.totals["red_amt"])} shrooms, {self.totals["red_bets"]} bets')
+			print(f'\033[34m Blue: \t{"{:,}".format(self.totals["blue_amt"])} shrooms, {self.totals["blue_bets"]} bets\033[00m',
+				  f'\033[31m Red: \t{"{:,}".format(self.totals["red_amt"])} shrooms, {self.totals["red_bets"]} bets\033[00m',
+				  sep=' || ', flush=True)
 
 		# Message contains 'Betting has ended' or over 3 minutes has passed, and we bet.
 		if 'Betting has ended' in message or time_dict['bet_timer'] >= 210:
@@ -157,9 +158,17 @@ class Main:
 
 				# Logic for SQLite db
 				if self.bet_dict.get('bet_complete'):
-					entry = self.update_bet(bet_team, bet_amount, new_balance, ratio_calc, teams)
-					print(f"inserted {entry}")
-
+					red = "\033[31m"
+					blue = "\033[34m"
+					entry = self.update_bet(bet_team, bet_amount, new_balance, ratio_calc, teams)[0]
+					print(f"""{red if bet_team=='red' else blue}
+	Bet details:
+        starting: {entry[3]}
+        ending: {entry[9]}
+        bet amount: {entry[5]}
+        bet side: {entry[6]}
+        favored side: {entry[7]}
+        ratio: {entry[8]}\033[00m""")
 				# Resetting values at the end of betting.
 				self.totals = {'blue_amt': 0, 'blue_bets': 0, 'red_amt': 0, 'red_bets': 0}
 				self.bet_dict = {'bet_team': None,
